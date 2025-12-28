@@ -6,7 +6,7 @@ import type { Conversation, Message, ConversationNode, ChatState } from '../type
 interface ChatActions {
   createConversation: () => string;
   setActiveConversation: (id: string) => void;
-  addMessage: (content: string, role: 'user' | 'assistant') => string;
+  addMessage: (content: string, role: 'user' | 'assistant', modelId?: string, mode?: 'standard' | 'deepThink' | 'webSearch', sources?: any[], thinking?: string) => string;
   branchFromMessage: (messageId: string) => void;
   branchFromNode: (nodeId: string) => void;
   navigateToNode: (nodeId: string) => void;
@@ -79,7 +79,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
         set({ activeConversationId: id });
       },
 
-      addMessage: (content, role) => {
+      addMessage: (content: string, role: 'user' | 'assistant', modelId?: string, mode?: 'standard' | 'deepThink' | 'webSearch', sources?: any[], thinking?: string) => {
         const { activeConversationId, conversations } = get();
         if (!activeConversationId) return '';
 
@@ -95,6 +95,10 @@ export const useChatStore = create<ChatState & ChatActions>()(
             ? currentNode.messages[currentNode.messages.length - 1].id 
             : null,
           children: [],
+          modelId: role === 'assistant' ? modelId : undefined,
+          mode: role === 'assistant' ? mode : undefined,
+          sources: role === 'assistant' ? sources : undefined,
+          thinking: role === 'assistant' ? thinking : undefined,
         };
 
         const updatedMessages = [...currentNode.messages, message];

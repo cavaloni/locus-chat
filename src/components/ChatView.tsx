@@ -4,17 +4,22 @@ import { ChatMessage } from '@/components/ChatMessage';
 import { ChatInput } from '@/components/ChatInput';
 import { useChatStore } from '@/store/chatStore';
 import { sendChatMessage } from '@/services/openrouter';
-import { Bot, GitBranch, ArrowUpCircle, Pencil, Check, X } from 'lucide-react';
+import { Bot, GitBranch, ArrowUpCircle, Pencil, Check, X, Sparkles, Brain, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConversationMiniMap } from './ConversationMiniMap';
+import { useModel } from '@/contexts/ModelContext';
+import { useMode } from '@/contexts/ModeContext';
+import type { MessageMode } from '@/services/openrouter';
+import type { SearchResult } from '@/types/conversation';
 
 export function ChatView() {
+  const { currentModel } = useModel();
+  const { currentMode } = useMode();
   const {
     activeConversationId,
     isLoading,
     apiKey,
-    selectedModel,
     getCurrentMessages,
     getCurrentNode,
     addMessage,
@@ -31,6 +36,8 @@ export function ChatView() {
   );
 
   const [streamingContent, setStreamingContent] = useState('');
+  const [streamingThinking, setStreamingThinking] = useState('');
+  const [streamingSources, setStreamingSources] = useState<SearchResult[]>([]);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -98,9 +105,9 @@ export function ChatView() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent, scrollToBottom]);
+  }, [messages, streamingContent, streamingThinking, scrollToBottom]);
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, mode: MessageMode) => {
     if (!apiKey) {
       setError('Please set your OpenRouter API key in settings');
       return;
@@ -121,16 +128,18 @@ export function ChatView() {
       { role: 'user' as const, content },
     ];
 
-    await sendChatMessage(chatMessages, selectedModel, apiKey, {
+    await sendChatMessage(chatMessages, currentModel.id, apiKey, {
       onToken: (token) => {
         if (!abortRef.current) {
           setStreamingContent((prev) => prev + token);
         }
       },
-      onComplete: (fullResponse) => {
+      onComplete: (fullResponse, thinking, sources) => {
         if (!abortRef.current) {
-          addMessage(fullResponse, 'assistant');
+          addMessage(fullResponse, 'assistant', currentModel.id, mode, sources, thinking);
           setStreamingContent('');
+          setStreamingThinking('');
+          setStreamingSources([]);
         }
         setLoading(false);
       },
@@ -138,15 +147,19 @@ export function ChatView() {
         setError(error.message);
         setLoading(false);
         setStreamingContent('');
+        setStreamingThinking('');
+        setStreamingSources([]);
       },
-    });
+    }, mode);
   };
 
   const handleStop = () => {
     abortRef.current = true;
     if (streamingContent) {
-      addMessage(streamingContent, 'assistant');
+      addMessage(streamingContent, 'assistant', currentModel.id, currentMode, streamingSources, streamingThinking);
       setStreamingContent('');
+      setStreamingThinking('');
+      setStreamingSources([]);
     }
     setLoading(false);
   };
@@ -287,6 +300,24 @@ export function ChatView() {
                   </div>
                 );
               })}
+              {streamingThinking && (
+                <div className="group flex gap-4 px-4 py-6 bg-purple-500/5 border-b border-purple-500/10">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-500/10 border border-purple-500/20">
+                    <Brain className="h-4 w-4 text-purple-400" />
+                  </div>
+                  <div className="flex-1 space-y-2 overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-purple-400">Thinking</span>
+                    </div>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <div className="whitespace-pre-wrap break-words text-purple-300/80">
+                        {streamingThinking}
+                        <span className="inline-block w-2 h-4 ml-1 bg-purple-400 animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {streamingContent && (
                 <div className="group flex gap-4 px-4 py-6 bg-[#0A0A0A]/30 backdrop-blur-md">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A] border border-white/[0.08] text-white">
@@ -295,6 +326,24 @@ export function ChatView() {
                   <div className="flex-1 space-y-2 overflow-hidden">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">Assistant</span>
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5">
+                        <div 
+                          className="w-3 h-3 rounded flex items-center justify-center"
+                          style={{ backgroundColor: `${currentModel.color}20` }}
+                        >
+                          <currentModel.icon 
+                            className="w-2 h-2" 
+                            style={{ color: currentModel.color }}
+                          />
+                        </div>
+                        <span className="text-xs text-white/60">{currentModel.name}</span>
+                        {currentModel.supportsThinking && currentMode === 'deepThink' && (
+                          <Sparkles className="w-2.5 h-2.5 text-purple-500" />
+                        )}
+                        {currentMode === 'webSearch' && (
+                          <Search className="w-2.5 h-2.5 text-blue-500" />
+                        )}
+                      </div>
                     </div>
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       <div className="whitespace-pre-wrap break-words">
@@ -311,12 +360,18 @@ export function ChatView() {
         </div>
       </ScrollArea>
 
-      <ChatInput
-        onSend={handleSend}
-        onStop={handleStop}
-        isLoading={isLoading}
-        disabled={!apiKey}
-      />
+      <div className="border-t border-white/[0.08] bg-[#030303]/40 backdrop-blur-md p-4">
+        <div className="mx-auto max-w-3xl">
+          <div className="relative rounded-xl border border-[#222] bg-[#0A0A0A] p-3 shadow-none transition-[box-shadow,border-color] focus-within:border-[#555] focus-within:shadow-[0_0_60px_-15px_rgba(255,255,255,0.1)]">
+            <ChatInput
+              onSend={handleSend}
+              onStop={handleStop}
+              isLoading={isLoading}
+              disabled={!apiKey}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

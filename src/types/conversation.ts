@@ -1,3 +1,10 @@
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  favicon?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -5,6 +12,10 @@ export interface Message {
   timestamp: number;
   parentId: string | null;
   children: string[];
+  modelId?: string;
+  mode?: 'standard' | 'deepThink' | 'webSearch';
+  sources?: SearchResult[];
+  thinking?: string;
 }
 
 export interface ConversationNode {

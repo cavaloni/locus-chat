@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { GitBranch, RotateCcw, User, Bot, Copy, Check, ChevronRight, Pencil, X } from 'lucide-react';
+import { GitBranch, RotateCcw, User, Bot, Copy, Check, ChevronRight, Pencil, X, Sparkles, Brain, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types/conversation';
+import { getModelById } from '@/config/models';
+import { ThinkingBlock } from './ThinkingBlock';
+import { SearchResults } from './SearchResults';
 
 interface ChatMessageProps {
   message: Message;
@@ -125,6 +128,8 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
+  const model = message.modelId ? getModelById(message.modelId) : null;
+  const ModelIcon = model?.icon;
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
@@ -154,6 +159,36 @@ export function ChatMessage({
           <span className="font-semibold text-sm text-white">
             {isUser ? 'You' : 'Assistant'}
           </span>
+          {!isUser && model && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5">
+                  <div 
+                    className="w-3 h-3 rounded flex items-center justify-center"
+                    style={{ backgroundColor: `${model.color}20` }}
+                  >
+                    <ModelIcon 
+                      className="w-2 h-2" 
+                      style={{ color: model.color }}
+                    />
+                  </div>
+                  <span className="text-xs text-white/60">{model.name}</span>
+                  {message.mode === 'deepThink' && (
+                    <Brain className="w-2.5 h-2.5 text-purple-500" />
+                  )}
+                  {message.mode === 'webSearch' && (
+                    <Search className="w-2.5 h-2.5 text-blue-500" />
+                  )}
+                  {model.supportsThinking && !message.mode && (
+                    <Sparkles className="w-2.5 h-2.5 text-yellow-500" />
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">{model.description}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           <span className="text-xs text-muted-foreground">
             {new Date(message.timestamp).toLocaleTimeString()}
           </span>
@@ -162,6 +197,17 @@ export function ChatMessage({
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <div className="whitespace-pre-wrap break-words">{message.content}</div>
         </div>
+
+        {!isUser && (
+          <>
+            {message.thinking && (
+              <ThinkingBlock thinking={message.thinking} />
+            )}
+            {message.sources && message.sources.length > 0 && (
+              <SearchResults sources={message.sources} />
+            )}
+          </>
+        )}
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Tooltip>

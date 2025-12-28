@@ -161,10 +161,32 @@ html, body, #root {
   }
 }
 
+@keyframes aurora-drift-3 {
+  0% {
+    transform: translate(0, -30vh) scale(0.5) rotate(0deg);
+  }
+  25% {
+    transform: translate(-20vw, 0) scale(0.52) rotate(10deg);
+  }
+  50% {
+    transform: translate(0, 30vh) scale(0.5) rotate(-10deg);
+  }
+  75% {
+    transform: translate(20vw, 0) scale(0.48) rotate(5deg);
+  }
+  100% {
+    transform: translate(0, -30vh) scale(0.5) rotate(0deg);
+  }
+}
+
 .animate-aurora-1 {
-  animation: aurora-drift-1 60s ease-in-out infinite;
+  animation: aurora-drift-1 86s ease-in-out infinite;
 }
 
 .animate-aurora-2 {
-  animation: aurora-drift-2 60s ease-in-out infinite;
+  animation: aurora-drift-2 86s ease-in-out infinite;
+}
+
+.animate-aurora-3 {
+  animation: aurora-drift-3 86s ease-in-out infinite;
 }

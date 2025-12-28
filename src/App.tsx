@@ -4,6 +4,8 @@ import { Sidebar } from '@/components/Sidebar';
 import { ChatView } from '@/components/ChatView';
 import { ConversationTree } from '@/components/ConversationTree';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { ModelProvider } from '@/contexts/ModelContext';
+import { ModeProvider } from '@/contexts/ModeContext';
 import { useChatStore } from '@/store/chatStore';
 import './index.css';
 
@@ -12,13 +14,16 @@ function App() {
   const { viewMode, error, setError, transitionOrigin } = useChatStore();
 
   return (
-    <TooltipProvider>
+    <ModelProvider>
+      <ModeProvider>
+        <TooltipProvider>
       <div
         className="fixed inset-0 -z-10 overflow-hidden bg-[#030303]"
         aria-hidden="true"
       >
         <div className="absolute top-0 left-0 h-[400px] w-[1400px] rounded-[50%] bg-[#0a4f4f] opacity-40 blur-[140px] animate-aurora-1 rotate-12" />
         <div className="absolute bottom-0 right-0 h-[400px] w-[1400px] rounded-[50%] bg-[#2d2470] opacity-40 blur-[140px] animate-aurora-2 -rotate-12" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[200px] w-[700px] rounded-[50%] bg-[#6b1a1a] opacity-30 blur-[100px] animate-aurora-3" />
       </div>
 
       <div className="relative isolate flex h-screen bg-transparent text-[#888]">
@@ -50,7 +55,9 @@ function App() {
 
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </div>
-    </TooltipProvider>
+      </TooltipProvider>
+      </ModeProvider>
+    </ModelProvider>
   );
 }
 

@@ -52,9 +52,11 @@ interface ChatMessage {
   content: string;
 }
 
+export type MessageMode = 'standard' | 'deepThink' | 'webSearch';
+
 interface StreamCallbacks {
   onToken: (token: string) => void;
-  onComplete: (fullResponse: string) => void;
+  onComplete: (fullResponse: string, thinking?: string, sources?: any[]) => void;
   onError: (error: Error) => void;
 }
 
@@ -62,9 +64,37 @@ export async function sendChatMessage(
   messages: ChatMessage[],
   modelId: string,
   apiKey: string,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  mode: MessageMode = 'standard'
 ): Promise<void> {
   try {
+    const requestBody: any = {
+      model: modelId,
+      messages,
+      stream: true,
+    };
+
+    // Add mode-specific parameters
+    if (mode === 'deepThink') {
+      requestBody.reasoning = { max_tokens: 8000 };
+    } else if (mode === 'webSearch') {
+      requestBody.tools = [{
+        type: 'function',
+        function: {
+          name: 'web_search',
+          description: 'Search the web for current information',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string' },
+            },
+            required: ['query'],
+          },
+        },
+      }];
+      requestBody.tool_choice = 'auto';
+    }
+
     const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -73,11 +103,7 @@ export async function sendChatMessage(
         'HTTP-Referer': window.location.origin,
         'X-Title': 'Swiss Army GPT',
       },
-      body: JSON.stringify({
-        model: modelId,
-        messages,
-        stream: true,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -92,6 +118,9 @@ export async function sendChatMessage(
 
     const decoder = new TextDecoder();
     let fullResponse = '';
+    let thinkingContent = '';
+    let sources: any[] = [];
+    let isInThinkingBlock = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -108,9 +137,33 @@ export async function sendChatMessage(
           try {
             const parsed = JSON.parse(data);
             const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
+            const reasoning = parsed.choices?.[0]?.delta?.reasoning_content;
+            
+            if (reasoning && mode === 'deepThink') {
+              thinkingContent += reasoning;
+              isInThinkingBlock = true;
+            } else if (content) {
+              if (isInThinkingBlock && mode === 'deepThink') {
+                // Transition from thinking to response
+                isInThinkingBlock = false;
+              }
               fullResponse += content;
               callbacks.onToken(content);
+            }
+            
+            // Handle tool calls for web search
+            if (parsed.choices?.[0]?.delta?.tool_calls) {
+              const toolCall = parsed.choices[0].delta.tool_calls[0];
+              if (toolCall.function?.arguments) {
+                try {
+                  const args = JSON.parse(toolCall.function.arguments);
+                  if (args.results) {
+                    sources = args.results;
+                  }
+                } catch {
+                  // Skip invalid JSON
+                }
+              }
             }
           } catch {
             // Skip invalid JSON lines
@@ -119,7 +172,7 @@ export async function sendChatMessage(
       }
     }
 
-    callbacks.onComplete(fullResponse);
+    callbacks.onComplete(fullResponse, thinkingContent, sources);
   } catch (error) {
     callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }

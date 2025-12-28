@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import type { ConversationNode } from '@/types/conversation';
+import { getModelById } from '@/config/models';
 
 interface MapNode {
   id: string;
@@ -14,6 +15,7 @@ interface MapNode {
   y: number;
   depth: number;
   children: MapNode[];
+  modelIds?: string[];
 }
 
 export function ConversationMiniMap() {
@@ -48,6 +50,12 @@ export function ConversationMiniMap() {
       const isCurrent = nodeId === currentNodeId;
       const isAncestor = pathIds.has(nodeId) && !isCurrent;
       
+      // Extract unique model IDs from assistant messages in this node
+      const modelIds = node.messages
+        .filter(m => m.role === 'assistant' && m.modelId)
+        .map(m => m.modelId!)
+        .filter((id, index, arr) => arr.indexOf(id) === index);
+      
       let siblingCount = 0;
       if (node.parentId) {
         const parent = conversation.nodes[node.parentId];
@@ -73,7 +81,8 @@ export function ConversationMiniMap() {
         x,
         y,
         depth,
-        children
+        children,
+        modelIds
       };
     };
     
@@ -159,9 +168,58 @@ export function ConversationMiniMap() {
               const x = node.x - minX + 50;
               const y = node.y - minY + 50;
               const isActive = node.isCurrent || node.isAncestor;
+              const models = node.modelIds?.map(id => getModelById(id)).filter(Boolean);
               
               return (
                 <g key={node.id}>
+                  {/* Model icons */}
+                  {models && models.length > 0 && (
+                    <g>
+                      {models.slice(0, 3).map((model, index) => {
+                        if (!model) return null;
+                        const Icon = model.icon;
+                        const iconX = x - 8 + (index * 6);
+                        const opacity = index === 2 && models.length > 3 ? 0.5 : 1;
+                        
+                        return (
+                          <g key={model.id} transform={`translate(${iconX}, ${y - 8})`}>
+                            <circle
+                              cx="6"
+                              cy="6"
+                              r="5"
+                              fill={model.color}
+                              fillOpacity={0.2}
+                              stroke={model.color}
+                              strokeWidth="0.5"
+                              opacity={opacity}
+                            />
+                            <Icon
+                              x="2"
+                              y="2"
+                              width="8"
+                              height="8"
+                              color={model.color}
+                              opacity={opacity}
+                            />
+                          </g>
+                        );
+                      })}
+                      {/* Fade effect indicator */}
+                      {models.length > 3 && (
+                        <text
+                          x={x + 10}
+                          y={y + 2}
+                          fontSize="8"
+                          fill="rgba(255,255,255,0.4)"
+                          textAnchor="start"
+                        >
+                          +{models.length - 3}
+                        </text>
+                      )}
+                    </g>
+                  )}
+                  
+                  {/* Node circle */}
                   <circle
                     cx={x}
                     cy={y}
